@@ -7,9 +7,15 @@ class NegativeSplitCalculator {
         this.resultsTable = document.getElementById('results-table');
         this.summaryStats = document.getElementById('summary-stats');
         this.copyButton = document.getElementById('copy-button');
+        this.downloadButton = document.getElementById('download-button');
         this.shareButton = document.getElementById('share-button');
         this.paceUnit = document.getElementById('pace-unit');
         this.unitSelect = document.getElementById('unit');
+        this.distanceInput = document.getElementById('distance');
+        this.segmentsInput = document.getElementById('segments');
+        
+        // Track if segments were manually changed
+        this.segmentsManuallyChanged = false;
         
         this.initializeEventListeners();
         this.updatePaceUnit();
@@ -23,13 +29,24 @@ class NegativeSplitCalculator {
             this.calculateSplits();
         });
 
+        // Distance change - auto-sync segments if not manually changed
+        this.distanceInput.addEventListener('input', () => {
+            this.autoSyncSegments();
+        });
+
+        // Segments manual change tracking
+        this.segmentsInput.addEventListener('input', () => {
+            this.segmentsManuallyChanged = true;
+        });
+
         // Unit change
         this.unitSelect.addEventListener('change', () => {
             this.updatePaceUnit();
         });
 
-        // Copy and share buttons
+        // Export and share buttons
         this.copyButton.addEventListener('click', () => this.copyResults());
+        this.downloadButton.addEventListener('click', () => this.downloadResults());
         this.shareButton.addEventListener('click', () => this.shareResults());
 
         // Theme toggle
@@ -55,6 +72,18 @@ class NegativeSplitCalculator {
         const unit = this.unitSelect.value;
         const displayUnit = unit === 'meters' ? 'meter' : unit.slice(0, -1); // Remove 's' from miles/kilometers
         this.paceUnit.textContent = displayUnit;
+    }
+
+    autoSyncSegments() {
+        // Only auto-sync if segments haven't been manually changed
+        if (!this.segmentsManuallyChanged) {
+            const distance = parseFloat(this.distanceInput.value);
+            if (distance && distance > 0) {
+                // Round to nearest whole number, but ensure minimum of 2 segments
+                const suggestedSegments = Math.max(2, Math.round(distance));
+                this.segmentsInput.value = suggestedSegments;
+            }
+        }
     }
 
     parseTime(timeStr) {
@@ -118,36 +147,55 @@ class NegativeSplitCalculator {
             const targetSeconds = this.parseTime(targetPace);
             const segmentDistance = distance / segments;
             
-            // Calculate negative splits using progressive improvement
-            const improvementFactor = 0.92; // Each split ~8% faster
+            // Calculate negative splits - each segment gets progressively FASTER
             const results = [];
             
-            // Generate raw improvement factors
-            const rawFactors = [];
-            let sumFactors = 0;
+            // For negative splits, we want each segment to be faster than the previous
+            // Start with a slower first segment, end with a faster last segment
+            // The middle segments create a smooth progression
+            
+            // Calculate the total time for the race
+            const totalRaceTime = targetSeconds * distance;
+            
+            // Create a linear progression where each segment gets faster
+            // We'll use a simple approach: start X seconds slower, end X seconds faster
+            const improvementPerSegment = 8; // seconds improvement per segment (adjustable)
+            const totalImprovement = improvementPerSegment * (segments - 1);
+            
+            // Calculate the base pace (what the middle segment should be)
+            const basePace = targetSeconds;
+            
+            // Generate paces for each segment
+            const segmentPaces = [];
+            let totalTimeCheck = 0;
             
             for (let i = 0; i < segments; i++) {
-                // Start slower, get faster (reverse the exponent)
-                const factor = Math.pow(improvementFactor, -i);
-                rawFactors.push(factor);
-                sumFactors += factor;
+                // Linear progression: start slower, get faster
+                const progressionFactor = (segments - 1 - i * 2) / 2; // This creates the progression
+                const segmentPace = basePace + (progressionFactor * improvementPerSegment);
+                segmentPaces.push(segmentPace);
+                totalTimeCheck += segmentPace * segmentDistance;
             }
             
-            // Normalize factors to maintain target average pace
-            const normalizer = (targetSeconds * segments) / sumFactors;
+            // Normalize to ensure we hit the target total time
+            const timeAdjustment = totalRaceTime / totalTimeCheck;
+            
+            for (let i = 0; i < segments; i++) {
+                segmentPaces[i] *= timeAdjustment;
+            }
             
             let cumulativeTime = 0;
             
             for (let i = 0; i < segments; i++) {
-                const segmentPace = rawFactors[i] * normalizer;
+                const segmentPace = segmentPaces[i];
                 const segmentTime = segmentPace * segmentDistance;
                 cumulativeTime += segmentTime;
                 
-                // Calculate improvement from previous segment
+                // Calculate improvement from previous segment (negative means faster)
                 let improvement = null;
                 if (i > 0) {
-                    const previousPace = rawFactors[i - 1] * normalizer;
-                    improvement = previousPace - segmentPace;
+                    const previousPace = segmentPaces[i - 1];
+                    improvement = previousPace - segmentPace; // Positive = faster this segment
                 }
                 
                 results.push({
@@ -275,46 +323,86 @@ class NegativeSplitCalculator {
         });
     }
 
-    copyResults() {
+    generateResultsText() {
         const distance = document.getElementById('distance').value;
         const unit = document.getElementById('unit').value;
         const targetPace = document.getElementById('target-pace').value;
         
         // Get current results
         const rows = this.resultsTable.querySelectorAll('.result-row');
-        if (rows.length === 0) return;
+        if (rows.length === 0) return '';
 
-        let copyText = `Negative Split Plan\n`;
-        copyText += `Distance: ${distance} ${unit}\n`;
-        copyText += `Target Pace: ${targetPace} per ${unit === 'meters' ? 'meter' : unit.slice(0, -1)}\n\n`;
+        let text = `Negative Split Plan\n`;
+        text += `Distance: ${distance} ${unit}\n`;
+        text += `Target Pace: ${targetPace} per ${unit === 'meters' ? 'meter' : unit.slice(0, -1)}\n\n`;
 
         rows.forEach((row, index) => {
             const segmentNum = index + 1;
             const pace = row.querySelector('.pace-display').textContent;
             const splitTime = row.querySelector('.text-right .text-sm').textContent.replace('Split: ', '');
-            copyText += `Segment ${segmentNum}: ${pace} (${splitTime})\n`;
+            text += `Segment ${segmentNum}: ${pace} (${splitTime})\n`;
         });
 
-        copyText += `\nGenerated by Negative Split Calculator`;
+        text += `\nGenerated by Negative Split Calculator`;
+        return text;
+    }
+
+    copyResults() {
+        const copyText = this.generateResultsText();
+        if (!copyText) return;
 
         navigator.clipboard.writeText(copyText).then(() => {
             // Show success feedback
-            const originalText = this.copyButton.innerHTML;
+            const originalIcon = this.copyButton.innerHTML;
             this.copyButton.innerHTML = `
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
                 </svg>
-                <span>Copied!</span>
             `;
             this.copyButton.classList.add('copy-success');
 
             setTimeout(() => {
-                this.copyButton.innerHTML = originalText;
+                this.copyButton.innerHTML = originalIcon;
                 this.copyButton.classList.remove('copy-success');
-            }, 2000);
+            }, 1500);
         }).catch(() => {
             alert('Could not copy to clipboard. Please manually select and copy the results.');
         });
+    }
+
+    downloadResults() {
+        const downloadText = this.generateResultsText();
+        if (!downloadText) return;
+
+        // Create filename with current date and distance
+        const distance = document.getElementById('distance').value;
+        const unit = document.getElementById('unit').value;
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `negative-split-${distance}${unit}-${date}.txt`;
+
+        // Create and download file
+        const blob = new Blob([downloadText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Show success feedback
+        const originalText = this.downloadButton.innerHTML;
+        this.downloadButton.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>Downloaded!</span>
+        `;
+
+        setTimeout(() => {
+            this.downloadButton.innerHTML = originalText;
+        }, 2000);
     }
 
     shareResults() {
@@ -363,6 +451,8 @@ class NegativeSplitCalculator {
         }
         if (urlParams.has('s')) {
             document.getElementById('segments').value = urlParams.get('s');
+            // If segments are loaded from URL, mark as manually changed
+            this.segmentsManuallyChanged = true;
         }
         if (urlParams.has('p')) {
             document.getElementById('target-pace').value = urlParams.get('p');
@@ -370,6 +460,11 @@ class NegativeSplitCalculator {
         if (urlParams.has('u')) {
             document.getElementById('unit').value = urlParams.get('u');
             this.updatePaceUnit();
+        }
+
+        // If no segments in URL but distance is present, auto-sync
+        if (urlParams.has('d') && !urlParams.has('s')) {
+            this.autoSyncSegments();
         }
 
         // Auto-calculate if all parameters are present
