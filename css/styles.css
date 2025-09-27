@@ -1,0 +1,215 @@
+/* Custom styles for Negative Split Calculator */
+
+/* Smooth transitions for theme changes */
+* {
+    transition-property: color, background-color, border-color;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
+}
+
+/* Focus states */
+input:focus,
+select:focus,
+button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(107, 114, 128, 0.1);
+}
+
+/* Custom scrollbar for better aesthetics */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgb(243, 244, 246);
+}
+
+.dark ::-webkit-scrollbar-track {
+    background: rgb(55, 65, 81);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgb(156, 163, 175);
+    border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: rgb(75, 85, 99);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgb(107, 114, 128);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgb(107, 114, 128);
+}
+
+/* Results table styling */
+.result-row {
+    padding: 1rem 1.5rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    align-items: center;
+}
+
+@media (max-width: 640px) {
+    .result-row {
+        grid-template-columns: 1fr;
+        gap: 0.5rem;
+        text-align: center;
+    }
+    
+    .result-row .segment-info {
+        border-bottom: 1px solid rgb(229, 231, 235);
+        padding-bottom: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .dark .result-row .segment-info {
+        border-color: rgb(55, 65, 81);
+    }
+}
+
+/* Pace display styling */
+.pace-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+}
+
+/* Stats cards */
+.stat-card {
+    background: white;
+    border: 1px solid rgb(229, 231, 235);
+    border-radius: 0.75rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.dark .stat-card {
+    background: rgb(31, 41, 55);
+    border-color: rgb(55, 65, 81);
+}
+
+.stat-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: rgb(17, 24, 39);
+}
+
+.dark .stat-value {
+    color: white;
+}
+
+.stat-label {
+    font-size: 0.875rem;
+    color: rgb(107, 114, 128);
+    margin-top: 0.25rem;
+}
+
+.dark .stat-label {
+    color: rgb(156, 163, 175);
+}
+
+/* Animation for results appearance */
+.fade-in {
+    animation: fadeIn 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Copy success feedback */
+.copy-success {
+    background-color: rgb(34, 197, 94) !important;
+    color: white !important;
+}
+
+/* Print styles */
+@media print {
+    header, footer, #copy-button, #share-button {
+        display: none !important;
+    }
+    
+    body {
+        background: white !important;
+        color: black !important;
+    }
+    
+    .bg-gray-50, .dark\:bg-gray-800 {
+        background: white !important;
+        border: 1px solid #ccc !important;
+    }
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* Error states */
+.error-border {
+    border-color: rgb(239, 68, 68) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Segment progression indicators */
+.segment-faster {
+    color: rgb(34, 197, 94);
+}
+
+.dark .segment-faster {
+    color: rgb(74, 222, 128);
+}
+
+.segment-slower {
+    color: rgb(239, 68, 68);
+}
+
+.dark .segment-slower {
+    color: rgb(248, 113, 113);
+}
+
+/* Mobile improvements */
+@media (max-width: 640px) {
+    .pace-display {
+        font-size: 1.125rem;
+    }
+    
+    .stat-value {
+        font-size: 1.25rem;
+    }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .border-gray-200 {
+        border-color: rgb(0, 0, 0);
+    }
+    
+    .dark .border-gray-700 {
+        border-color: rgb(255, 255, 255);
+    }
+}
