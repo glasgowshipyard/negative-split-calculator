@@ -157,31 +157,20 @@ class NegativeSplitCalculator {
             // Calculate the total time for the race
             const totalRaceTime = targetSeconds * distance;
             
-            // Create a linear progression where each segment gets faster
-            // We'll use a simple approach: start X seconds slower, end X seconds faster
-            const improvementPerSegment = 8; // seconds improvement per segment (adjustable)
-            const totalImprovement = improvementPerSegment * (segments - 1);
+            // Symmetric distribution approach for negative splits
+            // Calculate spread as percentage of target pace for unit-appropriate scaling
+            const spreadPercentage = 0.025; // 2.5% spread works well for all units
+            const maxSpread = targetSeconds * spreadPercentage;
             
-            // Calculate the base pace (what the middle segment should be)
-            const basePace = targetSeconds;
-            
-            // Generate paces for each segment
+            // Generate symmetric pairs around the target average
             const segmentPaces = [];
-            let totalTimeCheck = 0;
             
             for (let i = 0; i < segments; i++) {
-                // Linear progression: start slower, get faster
-                const progressionFactor = (segments - 1 - i * 2) / 2; // This creates the progression
-                const segmentPace = basePace + (progressionFactor * improvementPerSegment);
+                // Create symmetric distribution: slower segments first, faster segments last
+                // For segments 0,1,2,3: factors would be [0.75, 0.25, -0.25, -0.75]
+                const normalizedPosition = (segments - 1 - 2 * i) / (segments - 1);
+                const segmentPace = targetSeconds + (normalizedPosition * maxSpread);
                 segmentPaces.push(segmentPace);
-                totalTimeCheck += segmentPace * segmentDistance;
-            }
-            
-            // Normalize to ensure we hit the target total time
-            const timeAdjustment = totalRaceTime / totalTimeCheck;
-            
-            for (let i = 0; i < segments; i++) {
-                segmentPaces[i] *= timeAdjustment;
             }
             
             let cumulativeTime = 0;
