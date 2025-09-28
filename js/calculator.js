@@ -330,7 +330,7 @@ class NegativeSplitCalculator {
 
         rows.forEach((row, index) => {
             const segmentNum = index + 1;
-            const pace = row.querySelector('.pace-display').textContent;
+            const pace = row.querySelector('.pace-display').textContent.trim();
             const ordinal = segmentNum === 1 ? '1st' : segmentNum === 2 ? '2nd' : segmentNum === 3 ? '3rd' : `${segmentNum}th`;
             text += `${ordinal} ${segmentDistance}${unitName}: ${pace}\n`;
         });
