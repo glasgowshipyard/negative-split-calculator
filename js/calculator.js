@@ -13,20 +13,33 @@ class NegativeSplitCalculator {
         this.unitSelect = document.getElementById('unit');
         this.distanceInput = document.getElementById('distance');
         this.segmentsInput = document.getElementById('segments');
-        
+
+        // Repeats calculator elements
+        this.repeatsForm = document.getElementById('repeats-form');
+        this.repeatsResultsSection = document.getElementById('repeats-results-section');
+        this.repeatsResultsContainer = document.getElementById('repeats-results-container');
+        this.repeatsCopyButton = document.getElementById('repeats-copy-button');
+        this.repeatsDownloadButton = document.getElementById('repeats-download-button');
+
         // Track if segments were manually changed
         this.segmentsManuallyChanged = false;
-        
+
         this.initializeEventListeners();
         this.updatePaceUnit();
         this.loadFromURL();
     }
 
     initializeEventListeners() {
-        // Form submission
+        // Distance-based form submission
         this.form.addEventListener('submit', (e) => {
             e.preventDefault();
             this.calculateSplits();
+        });
+
+        // Repeats form submission
+        this.repeatsForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.calculateRepeats();
         });
 
         // Distance change - auto-sync segments if not manually changed
@@ -44,10 +57,14 @@ class NegativeSplitCalculator {
             this.updatePaceUnit();
         });
 
-        // Export and share buttons
+        // Export and share buttons - distance calculator
         this.copyButton.addEventListener('click', () => this.copyResults());
         this.downloadButton.addEventListener('click', () => this.downloadResults());
         this.shareButton.addEventListener('click', () => this.shareResults());
+
+        // Export buttons - repeats calculator
+        this.repeatsCopyButton.addEventListener('click', () => this.copyRepeatsResults());
+        this.repeatsDownloadButton.addEventListener('click', () => this.downloadRepeatsResults());
 
         // Theme toggle
         this.initializeThemeToggle();
@@ -465,6 +482,296 @@ class NegativeSplitCalculator {
                 this.calculateSplits();
             }, 100);
         }
+    }
+
+    // ============================================================
+    // REPEATS CALCULATOR METHODS
+    // ============================================================
+
+    calculateRepeats() {
+        const intervalDuration = document.getElementById('interval-duration').value.trim();
+        const segmentDuration = document.getElementById('segment-duration').value.trim();
+        const restDuration = document.getElementById('rest-duration').value.trim();
+        const numSets = parseInt(document.getElementById('num-sets').value, 10);
+
+        try {
+            const intervalSeconds = this.parseTime(intervalDuration);
+            const segmentSeconds = this.parseTime(segmentDuration);
+            const restSeconds = this.parseTime(restDuration);
+
+            // Validate that interval is evenly divisible by segment
+            if (intervalSeconds % segmentSeconds !== 0) {
+                alert('Interval duration must be evenly divisible by segment duration.\n\nFor example:\n- 4:00 interval with 1:00 segments ✓\n- 4:00 interval with 1:30 segments ✗');
+                return;
+            }
+
+            const numSegments = intervalSeconds / segmentSeconds;
+
+            // Calculate negative splits for each interval using the same logic
+            const allResults = [];
+
+            for (let set = 0; set < numSets; set++) {
+                const setResults = this.calculateNegativeSplitSegments(intervalSeconds, numSegments, segmentSeconds);
+                allResults.push({
+                    set: set + 1,
+                    segments: setResults,
+                    rest: set < numSets - 1 ? restSeconds : null
+                });
+            }
+
+            this.displayRepeatsResults(allResults, intervalSeconds, segmentSeconds, restSeconds, numSets);
+
+        } catch (error) {
+            console.error('Calculation error:', error);
+            alert('An error occurred during calculation. Please check your inputs.');
+        }
+    }
+
+    calculateNegativeSplitSegments(totalTime, numSegments, segmentDuration) {
+        // Use the same negative split logic as the distance calculator
+        const spreadPercentage = 0.025; // 2.5% spread
+        const averageSegmentTime = totalTime / numSegments;
+        const maxSpread = averageSegmentTime * spreadPercentage;
+
+        const segmentTimes = [];
+
+        for (let i = 0; i < numSegments; i++) {
+            // Create symmetric distribution: slower segments first, faster segments last
+            const normalizedPosition = (numSegments - 1 - 2 * i) / (numSegments - 1);
+            const segmentTime = averageSegmentTime + (normalizedPosition * maxSpread);
+            segmentTimes.push(segmentTime);
+        }
+
+        let cumulativeTime = 0;
+        const results = [];
+
+        for (let i = 0; i < numSegments; i++) {
+            const segmentTime = segmentTimes[i];
+            cumulativeTime += segmentTime;
+
+            // Calculate improvement from previous segment
+            let improvement = null;
+            if (i > 0) {
+                const previousTime = segmentTimes[i - 1];
+                improvement = previousTime - segmentTime; // Positive = faster this segment
+            }
+
+            results.push({
+                segment: i + 1,
+                time: this.formatTime(segmentTime),
+                timeSeconds: segmentTime,
+                cumulative: this.formatTime(cumulativeTime),
+                cumulativeSeconds: cumulativeTime,
+                improvement: improvement
+            });
+        }
+
+        return results;
+    }
+
+    displayRepeatsResults(allResults, intervalSeconds, segmentSeconds, restSeconds, numSets) {
+        // Show results section
+        this.repeatsResultsSection.classList.remove('hidden');
+        this.repeatsResultsSection.classList.add('fade-in');
+
+        // Clear previous results
+        this.repeatsResultsContainer.innerHTML = '';
+
+        // Display each set
+        allResults.forEach((setData) => {
+            const setCard = document.createElement('div');
+            setCard.className = 'bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden';
+
+            let setHTML = `
+                <div class="bg-gray-100 dark:bg-gray-700 px-6 py-4 border-b border-gray-200 dark:border-gray-600">
+                    <h4 class="text-lg font-bold text-gray-900 dark:text-white">
+                        Set ${setData.set} - ${this.formatTime(intervalSeconds)} interval
+                    </h4>
+                </div>
+                <div class="divide-y divide-gray-200 dark:divide-gray-700">
+            `;
+
+            // Add each segment
+            setData.segments.forEach((segment) => {
+                let improvementClass = '';
+                let improvementText = '';
+                if (segment.improvement !== null) {
+                    if (segment.improvement > 0) {
+                        improvementClass = 'segment-faster';
+                        improvementText = `(${this.formatTime(segment.improvement)} faster)`;
+                    } else if (segment.improvement < 0) {
+                        improvementClass = 'segment-slower';
+                        improvementText = `(${this.formatTime(Math.abs(segment.improvement))} slower)`;
+                    }
+                }
+
+                setHTML += `
+                    <div class="result-row px-6 py-4">
+                        <div class="segment-info">
+                            <div class="font-semibold text-gray-900 dark:text-white">
+                                Segment ${segment.segment}
+                            </div>
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                ${this.formatTime(segmentSeconds)}
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <div class="pace-display text-gray-900 dark:text-white">
+                                ${segment.time}
+                            </div>
+                            <div class="text-xs ${improvementClass} mt-1">
+                                ${improvementText}
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-gray-500 dark:text-gray-400">
+                                Total: ${segment.cumulative}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            setHTML += `</div>`;
+
+            // Add rest period if not last set
+            if (setData.rest !== null) {
+                setHTML += `
+                    <div class="bg-blue-50 dark:bg-blue-900/20 px-6 py-3 border-t border-gray-200 dark:border-gray-600">
+                        <div class="text-center text-sm font-medium text-blue-700 dark:text-blue-300">
+                            Rest: ${this.formatTime(restSeconds)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            setCard.innerHTML = setHTML;
+            this.repeatsResultsContainer.appendChild(setCard);
+        });
+
+        // Calculate and display summary
+        this.displayRepeatsSummary(allResults, intervalSeconds, restSeconds, numSets);
+
+        // Scroll to results
+        this.repeatsResultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    displayRepeatsSummary(allResults, intervalSeconds, restSeconds, numSets) {
+        const totalWorkTime = intervalSeconds * numSets;
+        const totalRestTime = restSeconds * (numSets - 1);
+        const totalTime = totalWorkTime + totalRestTime;
+
+        // Get first and last segment times across all sets
+        const firstSet = allResults[0];
+        const lastSet = allResults[allResults.length - 1];
+        const firstSegment = firstSet.segments[0];
+        const lastSegment = lastSet.segments[lastSet.segments.length - 1];
+
+        const summaryCard = document.createElement('div');
+        summaryCard.className = 'mt-6 bg-gray-50 dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6';
+        summaryCard.innerHTML = `
+            <h4 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Workout Summary</h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="stat-card">
+                    <div class="stat-value">${this.formatTime(totalTime)}</div>
+                    <div class="stat-label">Total Time</div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">Work + Rest</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${this.formatTime(totalWorkTime)}</div>
+                    <div class="stat-label">Total Work</div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">${numSets} intervals</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${this.formatTime(totalRestTime)}</div>
+                    <div class="stat-label">Total Rest</div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500 mt-1">${numSets - 1} rest periods</div>
+                </div>
+            </div>
+        `;
+
+        this.repeatsResultsContainer.appendChild(summaryCard);
+    }
+
+    generateRepeatsResultsText() {
+        const intervalDuration = document.getElementById('interval-duration').value;
+        const segmentDuration = document.getElementById('segment-duration').value;
+        const restDuration = document.getElementById('rest-duration').value;
+        const numSets = document.getElementById('num-sets').value;
+
+        let text = `${numSets}x ${intervalDuration} (${segmentDuration} segments), ${restDuration} rest\n\n`;
+
+        const sets = this.repeatsResultsContainer.querySelectorAll('.bg-gray-50.dark\\:bg-gray-800.rounded-2xl');
+        sets.forEach((setCard, setIndex) => {
+            text += `Set ${setIndex + 1}:\n`;
+            const rows = setCard.querySelectorAll('.result-row');
+            rows.forEach((row, segIndex) => {
+                const time = row.querySelector('.pace-display').textContent.trim();
+                text += `  ${segIndex + 1}. ${time}\n`;
+            });
+            if (setIndex < sets.length - 1) {
+                text += `  Rest: ${restDuration}\n`;
+            }
+            text += '\n';
+        });
+
+        return text;
+    }
+
+    copyRepeatsResults() {
+        const copyText = this.generateRepeatsResultsText();
+        if (!copyText) return;
+
+        navigator.clipboard.writeText(copyText).then(() => {
+            // Show success feedback
+            const originalIcon = this.repeatsCopyButton.innerHTML;
+            this.repeatsCopyButton.innerHTML = `
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            `;
+            this.repeatsCopyButton.classList.add('copy-success');
+
+            setTimeout(() => {
+                this.repeatsCopyButton.innerHTML = originalIcon;
+                this.repeatsCopyButton.classList.remove('copy-success');
+            }, 1500);
+        }).catch(() => {
+            alert('Could not copy to clipboard. Please manually select and copy the results.');
+        });
+    }
+
+    downloadRepeatsResults() {
+        const downloadText = this.generateRepeatsResultsText();
+        if (!downloadText) return;
+
+        const intervalDuration = document.getElementById('interval-duration').value;
+        const numSets = document.getElementById('num-sets').value;
+        const date = new Date().toISOString().split('T')[0];
+        const filename = `repeats-${numSets}x${intervalDuration}-${date}.txt`;
+
+        const blob = new Blob([downloadText], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        // Show success feedback
+        const originalText = this.repeatsDownloadButton.innerHTML;
+        this.repeatsDownloadButton.innerHTML = `
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+            <span>Downloaded!</span>
+        `;
+
+        setTimeout(() => {
+            this.repeatsDownloadButton.innerHTML = originalText;
+        }, 2000);
     }
 }
 
